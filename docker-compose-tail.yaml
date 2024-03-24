@@ -1,0 +1,76 @@
+
+networks:
+    # The presence of these objects is sufficient to define them
+    mailnet:
+        driver: bridge
+        ipam:
+            config:
+                - subnet: 192.168.249.0/24
+                  gateway: 192.168.249.1
+    dbnet: {}
+    fcginet: {}
+    mcachenet: {}
+
+
+#secrets:
+#   db_password:
+#     file: /dockerdata/secrets/db_password.txt
+#   db_root_password:
+#     file: /dockerdata/secrets/db_root_password.txt
+
+volumes:
+    rcvolume:
+    cb_conf:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/certbot/conf
+    cb_www_nc:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/certbot/nextcloud
+    cb_www_rc:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/certbot/roundcube
+    cb_www_mail:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/certbot/mail
+    db_data:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/dbdata
+    ncvolume:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/nextcloud
+    varmailvhosts:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/mailservices/varmailvhosts
+    zrok_env:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/zrok/env
+    zrokreserve:
+      driver: local
+      driver_opts:
+        type: none
+        o: bind
+        device: /dockerdata/zrok/reserve

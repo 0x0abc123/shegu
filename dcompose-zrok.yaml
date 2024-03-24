@@ -1,0 +1,66 @@
+    zrok-init:
+        image: busybox
+        # matches uid:gid of "nobody" in zrok container image
+        command: chown -Rc 65534:65534 /mnt/.zrok
+        user: root
+        volumes:
+            - zrok_env:/mnt/.zrok
+
+    # enable zrok environment
+    zrok-enable:
+        image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+        depends_on:
+            zrok-init:
+                condition: service_completed_successfully
+        entrypoint: zrok-enable.bash
+        volumes:
+            - zrok_env:/mnt
+        environment:
+            STATE_DIRECTORY: /mnt
+            # Copy your zrok environment token from the zrok web console and paste it in a file named .env in the same folder as this docker compose yaml:
+            ZROK_ENABLE_TOKEN:
+            ZROK_API_ENDPOINT:
+            ZROK_ENVIRONMENT_NAME: docker-private-access
+    zrok-reserve:
+        image: ${ZROK_CONTAINER_IMAGE:-docker.io/openziti/zrok}
+        depends_on:
+            zrok-enable:
+                condition: service_completed_successfully
+        entrypoint: >
+            /bin/sh -c 'if [ ! -f /reservedata/ssh ] ; then zrok reserve private localhost:22 --backend-mode tcpTunnel  --json-output |  jq .token > /reservedata/ssh ; fi;
+            if [ ! -f /reservedata/rspamd ] ; then zrok reserve private localhost:11334 --backend-mode tcpTunnel  --json-output |  jq .token > /reservedata/rspamd ; fi'
+        volumes:
+            - zrok_env:/mnt
+            - zrokreserve:/reservedata
+        environment:
+            HOME: /mnt
+
+    zrok-private-share-ssh:
+        network_mode: host
+        image: docker.io/openziti/zrok
+        restart: unless-stopped
+        entrypoint: "/bin/sh -c 'zrok share reserved $(cat /reservedata/ssh | tr -d \\\") --headless'"
+        depends_on:
+            zrok-reserve:
+                condition: service_completed_successfully
+        volumes:
+            - zrok_env:/mnt
+            - zrokreserve:/reservedata
+        environment:
+            HOME: /mnt
+            PFXLOG_NO_JSON: "true"
+
+    zrok-private-share-rspamd:
+        network_mode: host
+        image: docker.io/openziti/zrok
+        restart: unless-stopped
+        entrypoint: "/bin/sh -c 'zrok share reserved $(cat /reservedata/rspamd | tr -d \\\") --headless'"
+        depends_on:
+            zrok-reserve:
+                condition: service_completed_successfully
+        volumes:
+            - zrok_env:/mnt
+            - zrokreserve:/reservedata
+        environment:
+            HOME: /mnt
+            PFXLOG_NO_JSON: "true"

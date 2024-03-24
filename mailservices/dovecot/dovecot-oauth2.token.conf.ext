@@ -1,0 +1,3 @@
+introspection_url = OFFICEOAUTH2USERINFOURL
+username_attribute = email
+tls_allow_invalid_cert = yes

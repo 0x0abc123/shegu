@@ -1,0 +1,141 @@
+version: "3.7"
+services:
+#    memcached:
+#        image: memcached:1.6.24-alpine3.19
+#        restart: unless-stopped
+#        networks:
+#            - mcachenet
+    redis:
+        image: "redis:7-bookworm"
+        restart: unless-stopped
+        networks:
+            - mcachenet
+        command: "redis-server --save 60 1 --loglevel warning"
+    mariadb:
+        image: mariadb:latest
+        restart: unless-stopped
+        volumes:
+            - db_data:/var/lib/mysql
+            - /dockerdata/mariadb/scripts:/tmp/sqlscripts
+            - /dockerdata/mariadb/50server.cnf:/etc/mysql/mariadb.conf.d/50-server.cnf
+        environment:
+            MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+            MYSQL_DATABASE: nextcloud
+            MYSQL_USER: nc
+            MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+        networks:
+            - dbnet
+        healthcheck:
+            interval: 8s
+            retries: 5
+            test:
+                [
+                "CMD",
+                "healthcheck.sh",
+                "--su-mysql",
+                "--connect",
+                "--innodb_initialized"
+                ]
+            timeout: 30s
+#        secrets:
+#            - db_root_password
+#            - db_password
+    nextcloud:
+        depends_on:
+            mariadb:
+                condition: service_healthy
+            redis:
+                condition: service_started
+        build: ./nextcloud
+        restart: unless-stopped
+        networks:
+            - mailnet
+            - dbnet
+            - fcginet
+            - mcachenet
+        volumes:
+            - ncvolume:/var/www/nextcloud
+            - /dockerdata/nextconf/php.ini:/etc/php/8.2/fpm/php.ini
+            - /dockerdata/nextconf/www.conf:/etc/php/8.2/fpm/pool.d/www.conf
+    nginx:
+        image: nginx:mainline-alpine3.18-perl
+        restart: unless-stopped
+        ports:
+            - "80:80"
+            - "443:443"
+        command: "/bin/sh -c 'while :; do sleep 6h & wait $${!}; nginx -s reload; done & nginx -g \"daemon off;\"'"
+        networks:
+            - fcginet
+        volumes:
+            - ncvolume:/var/www/nextcloud
+            - rcvolume:/var/www/html
+            - /dockerdata/nginx/:/etc/nginx/conf.d/:ro
+            - cb_www_nc:/var/www/certbot/nextcloud
+            - cb_www_rc:/var/www/certbot/roundcube
+            - cb_www_mail:/var/www/certbot/mail
+            - cb_conf:/etc/letsencrypt
+    mailservices:
+        build: ./mailservices
+        restart: unless-stopped
+        networks:
+            - mailnet
+        ports:
+            - 25:25
+            - 587:587
+        volumes:
+            - varmailvhosts:/var/mail/vhosts
+            - /dockerdata/mailservices/postfix/virtualdomains:/etc/postfix/virtual_domains
+            - /dockerdata/mailservices/postfix/vmaps:/etc/postfix/vmaps
+            - /dockerdata/mailservices/postfix/maincf:/etc/postfix/main.cf
+            - /dockerdata/mailservices/postfix/mastercf:/etc/postfix/master.cf
+            - /dockerdata/mailservices/dovecot/log:/var/log/dovecot
+            - /dockerdata/mailservices/dovecot/10mail.conf:/etc/dovecot/conf.d/10-mail.conf
+            - /dockerdata/mailservices/dovecot/10master.conf:/etc/dovecot/conf.d/10-master.conf
+            - /dockerdata/mailservices/dovecot/15lda.conf:/etc/dovecot/conf.d/15-lda.conf
+            - /dockerdata/mailservices/dovecot/10auth.conf:/etc/dovecot/conf.d/10-auth.conf
+            - /dockerdata/mailservices/dovecot/dovecot-oauth2.token.conf.ext:/etc/dovecot/dovecot-oauth2.token.conf.ext
+            - cb_conf:/etc/letsencrypt
+    rspamd:
+        depends_on:
+            redis:
+                condition: service_started
+        image: rspamd/rspamd:latest
+        restart: unless-stopped
+        networks:
+            mailnet:
+                ipv4_address: 192.168.249.254
+            mcachenet: {}
+        ports:
+            - "127.0.0.1:11334:11334"
+        volumes:
+            - /dockerdata/rspamd/config:/etc/rspamd
+            - /dockerdata/rspamd/db:/var/lib/rspamd
+        environment:
+            RSPAMD_REDIS_SERVERS: redis
+            RSPAMD_USE_BAYES: 1
+    roundcube:
+        depends_on:
+            mariadb:
+                condition: service_healthy
+            mailservices:
+                condition: service_started
+        image: roundcube/roundcubemail:1.6.6-fpm
+        restart: unless-stopped
+        networks:
+            - mailnet
+            - dbnet
+            - fcginet
+        volumes:
+            - rcvolume:/var/www/html
+            - /dockerdata/roundcube/config/:/var/roundcube/config/
+        environment:
+            ROUNDCUBEMAIL_DEFAULT_HOST: mailservices
+            ROUNDCUBEMAIL_SMTP_SERVER: mailservices
+            ROUNDCUBEMAIL_SMTP_PORT: 25
+            ROUNDCUBEMAIL_UPLOAD_MAX_FILESIZE: 15M
+            ROUNDCUBEMAIL_DB_TYPE: mysql
+            ROUNDCUBEMAIL_DB_HOST: mariadb
+            ROUNDCUBEMAIL_DB_PORT: 3306
+            ROUNDCUBEMAIL_DB_USER: rc
+            ROUNDCUBEMAIL_DB_NAME: roundcubemail
+            ROUNDCUBEMAIL_DB_PASSWORD: ${MYSQL_PASSWORD}

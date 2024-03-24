@@ -1,0 +1,70 @@
+smtpd_banner = Welcome ESMTP
+biff = no
+append_dot_mydomain = no
+readme_directory = no
+compatibility_level = 3.6
+
+myhostname = mailhost.fqdn
+alias_maps = hash:/etc/aliases
+alias_database = hash:/etc/aliases
+myorigin = /etc/mailname
+mydestination = $myhostname, localhost.localdomain, localhost
+# clients on these trusted networks can send mail via postfix to other smtp relays
+# the first network is the docker "officenet" bridge network
+mynetworks = 192.168.249.0/24 127.0.0.0/8 [::ffff:127.0.0.0]/104 [::1]/128
+mailbox_size_limit = 0
+recipient_delimiter = +
+inet_interfaces = all
+inet_protocols = all
+
+smtpd_client_restrictions = permit_mynetworks permit_sasl_authenticated reject_unknown_reverse_client_hostname
+smtpd_helo_restrictions = permit_mynetworks permit_sasl_authenticated reject_invalid_helo_hostname reject_non_fqdn_helo_hostname reject_unknown_helo_hostname
+smtpd_helo_required=yes
+
+smtpd_milters = inet:192.168.249.254:11332
+milter_mail_macros=i {mail_addr} {client_addr} {client_name} {auth_authen}
+# skip mail without checks if something goes wrong
+milter_default_action = accept
+
+smtpd_relay_restrictions = permit_mynetworks permit_sasl_authenticated defer_unauth_destination
+relayhost = [SMTPSMARTHOST_FQDN]:SMTPSMARTHOST_PORT
+relay_destination_concurrency_limit = 20
+smtp_sasl_auth_enable = yes
+smtp_sasl_password_maps = static:SMTPSMARTHOST_CREDS
+smtp_sasl_security_options = noanonymous
+smtp_tls_security_level = may
+header_size_limit = 4096000
+
+
+# TLS parameters
+smtpd_tls_cert_file=/etc/letsencrypt/live/mailhost.fqdn/fullchain.pem
+smtpd_tls_key_file=/etc/letsencrypt/live/mailhost.fqdn/privkey.pem
+smtpd_tls_security_level=may
+
+##SASL##
+smtpd_sasl_auth_enable = yes
+smtpd_sasl_type = dovecot
+smtpd_sasl_path = private/auth
+smtpd_sasl_security_options = noanonymous
+smtpd_sasl_local_domain = $mydomain
+broken_sasl_auth_clients = yes
+
+smtp_tls_CApath=/etc/ssl/certs
+smtp_tls_security_level=may
+smtp_tls_session_cache_database = btree:${data_directory}/smtp_scache
+
+home_mailbox = Maildir/
+mailq_path = /usr/bin/mailq
+
+maillog_file = /var/log/postfix.log
+
+virtual_mailbox_domains = /etc/postfix/virtual_domains
+virtual_mailbox_base = /var/mail/vhosts
+virtual_mailbox_maps = hash:/etc/postfix/vmaps/vmailbox
+virtual_alias_maps = hash:/etc/postfix/vmaps/virtual_alias
+virtual_minimum_uid = 100
+virtual_uid_maps = static:5000
+virtual_gid_maps = static:5000
+virtual_transport = virtual
+virtual_mailbox_limit = 104857600
+
