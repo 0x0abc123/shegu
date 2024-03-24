@@ -40,8 +40,8 @@ Other (Dockerized) services that support the server include:
 
 ### Notes
 
-! If proxying the NextCloud server via CloudFlare, you need to add a page rule to **disable RocketLoader** for any NextCloud URLs because it will break the app
-! You need to generate and install valid TLS certificates for Nginx (the CloudFlare origin certificates will do) and **set CloudFlare SSL/TLS encryption mode to Full(Strict)**
+- ! If proxying the NextCloud server via CloudFlare, you need to add a page rule to **disable RocketLoader** for any NextCloud URLs because it will break the app
+- ! You need to generate and install valid TLS certificates for Nginx (the CloudFlare origin certificates will do) and **set CloudFlare SSL/TLS encryption mode to Full(Strict)**
 
 ## Installation
 
